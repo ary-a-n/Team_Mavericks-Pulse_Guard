@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import { loginUser, registerUser } from "@/lib/api/auth";
+import { clearToken } from "@/lib/api/client";
 
 interface User {
   id: string;
@@ -21,69 +23,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is still logged in (from localStorage)
-    const savedUser = localStorage.getItem("wardpulse_user");
+    const savedUser = localStorage.getItem("pg_user");
     if (savedUser) {
       try {
         setUser(JSON.parse(savedUser));
-      } catch (error) {
-        console.error("Failed to parse saved user:", error);
-        localStorage.removeItem("wardpulse_user");
+      } catch {
+        localStorage.removeItem("pg_user");
       }
     }
     setIsLoading(false);
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    // Simulate API call
-    try {
-      // Basic validation
-      if (!email || !password) {
-        throw new Error("Email and password are required");
-      }
-
-      // Simulate successful login
-      const newUser: User = {
-        id: `user_${Date.now()}`,
-        email,
-        name: email.split("@")[0],
-      };
-
-      setUser(newUser);
-      localStorage.setItem("wardpulse_user", JSON.stringify(newUser));
-    } catch (error) {
-      throw error;
-    }
+  const signIn = async (email: string, password: string): Promise<void> => {
+    await loginUser(email, password);
+    const newUser: User = {
+      id: `user_${Date.now()}`,
+      email,
+      name: email.split("@")[0],
+    };
+    setUser(newUser);
+    localStorage.setItem("pg_user", JSON.stringify(newUser));
   };
 
-  const signUp = async (email: string, password: string, name: string) => {
-    // Simulate API call
-    try {
-      // Basic validation
-      if (!email || !password || !name) {
-        throw new Error("All fields are required");
-      }
-      if (password.length < 6) {
-        throw new Error("Password must be at least 6 characters");
-      }
-
-      // Simulate successful signup
-      const newUser: User = {
-        id: `user_${Date.now()}`,
-        email,
-        name,
-      };
-
-      setUser(newUser);
-      localStorage.setItem("wardpulse_user", JSON.stringify(newUser));
-    } catch (error) {
-      throw error;
-    }
+  const signUp = async (
+    email: string,
+    password: string,
+    name: string
+  ): Promise<void> => {
+    await registerUser(email, password);
+    await loginUser(email, password);
+    const newUser: User = { id: `user_${Date.now()}`, email, name };
+    setUser(newUser);
+    localStorage.setItem("pg_user", JSON.stringify(newUser));
   };
 
-  const signOut = () => {
+  const signOut = (): void => {
     setUser(null);
-    localStorage.removeItem("wardpulse_user");
+    clearToken();
+    localStorage.removeItem("pg_user");
   };
 
   return (
