@@ -10,32 +10,45 @@ logger = logging.getLogger("agent.chains.temporal")
 
 temporal_prompt = ChatPromptTemplate.from_messages([
     ("system", """You are a temporal reasoning engine for healthcare handoffs.
-Convert all relative time references to absolute timestamps.
+Your job: (1) convert relative times to absolute timestamps, (2) calculate next dose times.
 
 Handoff happening at: {handoff_time}
 
-Time conversion rules:
-- "4 hours ago" → subtract 4 hours from handoff_time
-- "subah" / "morning" → 08:00
-- "raat" / "night" → 22:00
-- "sham" / "evening" → 20:00
-- "dopahar" / "afternoon" → 14:00
-- "4 baje" → 04:00
+━━━ TIME CONVERSION RULES ━━━
+- "4 hours ago"            → subtract 4h from handoff_time
+- "subah" / "morning"      → 08:00
+- "raat" / "night"         → 22:00
+- "sham" / "shaam"         → 18:00
+- "dopahar" / "afternoon"  → 14:00
+- "4 baje"                 → 04:00
 
-Next dose calculation (standard frequencies):
-- Warfarin → once daily (24h after last dose)
-- Insulin (regular/short-acting) → every 4-6h
-- Insulin (long-acting e.g. glargine) → every 24h
-- IV antibiotics (Vancomycin, Pip-Tazo) → every 6-8h
-- Oral antibiotics → every 8-12h
-- Furosemide (Lasix) → every 12-24h
-- Digoxin → every 24h
-- Antihypertensives → every 12-24h
+━━━ NEXT DOSE — STRICT TWO-STEP PROCESS ━━━
+
+STEP 1 — Read frequency FROM THE TRANSCRIPT (always try this first):
+  Transcript keyword       → interval
+  OD / once daily          → +24h  → format as "HH:MM (next day)"
+  BD / BID / twice daily   → +12h
+  TID / thrice daily       → +8h
+  QID / four times daily   → +6h
+  SOS / PRN / as needed    → skip — do NOT calculate a next dose
+  "subah ek baar"          → treat as OD → +24h
+
+STEP 2 — Frequency NOT stated in transcript:
+  Use your pharmacological knowledge of that specific drug's standard clinical dosing.
+  Do NOT blindly use "every 8-12h" — each drug has its own PK/PD profile.
+  When you use this fallback, record it in calculated_times like this:
+    "MedicationName_frequency_source": "inferred — not stated in transcript"
+  When frequency IS stated, record:
+    "MedicationName_frequency_source": "stated — '<exact phrase from transcript>'"
+
+OUTPUT FORMAT RULE:
+  - Once-daily drugs always format as "HH:MM (next day)" — NOT a raw time like "08:00"
+  - Multi-dose drugs: add the interval and write as plain "HH:MM"
 
 Return ONLY valid JSON matching this EXACT schema:
 
 {{
-  "handoff_time": "HH:MM (24-hour)",
+  "handoff_time": "HH:MM",
   "events": [
     {{
       "event": "description of what happened",
@@ -43,14 +56,21 @@ Return ONLY valid JSON matching this EXACT schema:
       "relative_original": "exact phrase from transcript"
     }}
   ],
-  "next_dose_times": ["HH:MM - medication name e.g. 08:00 - Warfarin (next daily dose)"],
-  "calculated_times": {{}}
+  "next_dose_times": [
+    "08:00 (next day) - Azithromycin (OD — inferred)",
+    "20:00 - Vancomycin (q8h — stated)"
+  ],
+  "calculated_times": {{
+    "Azithromycin_frequency_source": "inferred — not stated in transcript",
+    "Vancomycin_frequency_source": "stated — 'q8h' in transcript"
+  }}
 }}
 
-Rules:
-- Use EXACTLY these field names — event not type, absolute_time not time
-- Always populate next_dose_times if any medication was given
-- Output ONLY the JSON object, no explanation"""),
+Strict rules:
+- field names: event, absolute_time, relative_original — NOT type, NOT time
+- Populate next_dose_times for EVERY medication that was administered
+- Populate calculated_times for EVERY medication with its frequency_source
+- Output ONLY the JSON object, no markdown, no explanation"""),
     ("human", """Transcript: {transcript}
 Extracted Entities: {entities}
 Handoff Time: {handoff_time}

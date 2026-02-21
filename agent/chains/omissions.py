@@ -13,7 +13,17 @@ Detect CRITICAL MISSING INFORMATION by analyzing what SHOULD have been mentioned
 RETRIEVED MONITORING STANDARDS:
 {rag_context}
 
-NEGATIVE REASONING — detect ABSENCE of expected care elements:
+━━━ MEDICATION FREQUENCY CHECK (always run this first) ━━━
+You will receive a temporal_calculated_times dict from the previous pipeline step.
+Any entry with value containing "inferred — not stated in transcript" means the nurse
+did NOT mention the dosing frequency for that drug.
+For each such entry, add an omission:
+  type: "<DrugName>_frequency_not_stated"
+  severity: "MEDIUM"
+  reason: "Nurse did not specify dosing frequency for <DrugName>. Frequency was inferred from pharmacology, not confirmed in handoff."
+  expected_in_handoff: "State frequency explicitly, e.g. '<DrugName> OD' or '<DrugName> BD'"
+
+━━━ NEGATIVE REASONING — detect ABSENCE of expected care elements ━━━
 - For any drug: was monitoring/level/assessment mentioned?
 - For any condition: were relevant vitals and assessment mentioned?
 - For any symptom: was follow-up or reassessment mentioned?
@@ -43,6 +53,7 @@ Rules:
 Extracted Entities: {extracted}
 Detected Risks: {risks}
 Previous Shift Context: {context}
+Temporal Calculated Times: {temporal_calculated_times}
 
 Return ONLY the JSON:""")
 ])
@@ -63,14 +74,21 @@ async def analyze_omissions(
     extracted: dict,
     risks: dict,
     context: str = "",
+    temporal_calculated_times: dict | None = None,
 ) -> OmissionAnalysis:
     """Layer 4: Detect what critical information was NOT mentioned in handoff."""
     query = _build_omission_query(extracted)
     rag_context = query_clinical_knowledge(query, n_results=3)
+    calculated_times = temporal_calculated_times or {}
+
+    inferred_count = sum(
+        1 for v in calculated_times.values() if "inferred" in str(v)
+    )
     logger.info(
-        "Omission analysis | active_risks=%d | kb_docs_retrieved=%s",
+        "Omission analysis | active_risks=%d | kb_docs_retrieved=%s | inferred_freq=%d",
         len(risks.get("alerts", [])),
         "yes" if rag_context else "no",
+        inferred_count,
     )
 
     try:
@@ -80,6 +98,7 @@ async def analyze_omissions(
             "risks": str(risks),
             "context": context,
             "rag_context": rag_context or "No specific protocols retrieved. Use general nursing handoff standards.",
+            "temporal_calculated_times": str(calculated_times),
         }, OmissionAnalysis)
 
         high_count = sum(1 for o in result.omissions if o.severity == RiskSeverity.HIGH)

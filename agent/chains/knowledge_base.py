@@ -1,6 +1,7 @@
 
 import logging
 import chromadb
+from chromadb import Settings as ChromaSettings
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 from pathlib import Path
 
@@ -20,7 +21,10 @@ def _get_collection():
     """Initialise ChromaDB client and collection on first call."""
     global _client, _collection
     if _collection is None:
-        _client = chromadb.PersistentClient(path=CHROMA_PATH)
+        _client = chromadb.PersistentClient(
+            path=CHROMA_PATH,
+            settings=ChromaSettings(anonymized_telemetry=False),
+        )
         embedding_fn = SentenceTransformerEmbeddingFunction(
             model_name=EMBEDDING_MODEL
         )

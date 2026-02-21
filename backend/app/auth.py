@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import os
 from typing import Optional
 import jwt
 import bcrypt
@@ -9,9 +10,9 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.database import get_db
 
-SECRET_KEY = "YOUR_SUPER_SECRET_KEY"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+SECRET_KEY: str = os.getenv("SECRET_KEY", "pulse_guard_super_secret_key_change_in_prod")
+ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 

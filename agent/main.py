@@ -1,3 +1,6 @@
+import os
+os.environ["ANONYMIZED_TELEMETRY"] = "False"   # disable chromadb → posthog before any chromadb import
+
 from dotenv import load_dotenv
 load_dotenv()  # must be before any chain imports so MEGALLM_API_KEY is set
 

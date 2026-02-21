@@ -108,7 +108,7 @@ class HandoffSummary(BaseModel):
         validation_alias=AliasChoices("patient_name", "patient name", "name"),
     )
     bed: str = Field(
-        default="Unknown",
+        default="Not stated",
         validation_alias=AliasChoices("bed", "bed_number", "bed number"),
     )
     age: Optional[int] = None
@@ -116,6 +116,22 @@ class HandoffSummary(BaseModel):
         default=None,
         validation_alias=AliasChoices("chief_complaint", "chief complaint", "complaint", "admission_reason"),
     )
+
+    @field_validator("bed", mode="before")
+    @classmethod
+    def coerce_bed(cls, v: object) -> object:
+        """LLM returns null when bed isn't mentioned — fall back gracefully."""
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return "Not stated"
+        return v
+
+    @field_validator("patient_name", mode="before")
+    @classmethod
+    def coerce_patient_name(cls, v: object) -> object:
+        """LLM returns null when patient name isn't mentioned — fall back gracefully."""
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return "Unknown"
+        return v
 
 
 class ExtractedData(BaseModel):
@@ -177,10 +193,12 @@ class OmissionAnalysis(BaseModel):
 
 
 class HinglishSummary(BaseModel):
-    """Layer 5: Nurse-friendly Hinglish summary of the full pipeline output."""
-    narrative: str           # Full conversational Hinglish summary
-    key_alerts: List[str]    # Critical points as bullet strings
-    action_items: List[str]  # Specific actions for the incoming nurse
+    """Layer 5: Structured Hinglish summary — one field per UI section."""
+    patient_overview: str        # 1-2 line patient snapshot
+    medications: List[str]       # One line per medication
+    risk_alerts: List[str]       # One line per alert: "[SEVERITY] issue — action"
+    missing_info: List[str]      # Top omissions, one line each
+    action_items: List[str]      # Numbered-style action steps for incoming nurse
 
 
 class AgentOutput(BaseModel):

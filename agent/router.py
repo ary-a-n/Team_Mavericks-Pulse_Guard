@@ -49,6 +49,7 @@ async def process_handoff(body: HandoffRequest) -> AgentOutput:
                 extracted.dict(),
                 {},
                 context=body.patient_context or "",
+                temporal_calculated_times=temporal.calculated_times,
             ),
         )
 
