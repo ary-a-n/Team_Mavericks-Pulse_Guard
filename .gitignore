@@ -1,0 +1,8 @@
+/backend/myenv_hacky/
+/backend/app/__pycache__/
+/backend/app/routers/__pycache__/
+__pycache__
+chroma_db
+.env
+.DS_Store
+*.txt
