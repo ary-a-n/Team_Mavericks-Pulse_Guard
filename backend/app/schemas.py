@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, EmailStr
 
 class UserCreate(BaseModel):
@@ -21,3 +22,14 @@ class TokenData(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+class PatientCreate(BaseModel):
+    name: str
+    bed_number: str | None = None
+    age: int | None = None
+    admission_reason: str | None = None
+    status: str | None = None
+
+class PatientResponse(PatientCreate):
+    id: int
+    created_at: datetime
+    class Config: from_attributes = True

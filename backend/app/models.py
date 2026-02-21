@@ -28,6 +28,7 @@ class Patient(Base):
     bed_number = Column(String, index=True)
     age = Column(Integer)
     admission_reason = Column(String)
+    status=Column(String)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
