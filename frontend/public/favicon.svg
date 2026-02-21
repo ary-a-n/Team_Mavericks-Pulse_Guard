@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Background circle -->
+  <circle cx="128" cy="128" r="120" fill="#dc2626"/>
+  
+  <!-- White medical cross -->
+  <g fill="white">
+    <!-- Vertical bar of cross -->
+    <rect x="108" y="60" width="40" height="136" rx="8"/>
+    <!-- Horizontal bar of cross -->
+    <rect x="60" y="108" width="136" height="40" rx="8"/>
+  </g>
+  
+  <!-- Outer ring accent -->
+  <circle cx="128" cy="128" r="120" fill="none" stroke="white" stroke-width="6" opacity="0.3" stroke-dasharray="20,10"/>
+</svg>
