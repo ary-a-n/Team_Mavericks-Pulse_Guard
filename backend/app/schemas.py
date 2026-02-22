@@ -46,6 +46,9 @@ class PatientCreate(BaseModel):
     age: Optional[int] = None
     admission_reason: Optional[str] = None
     status: Optional[str] = "active"
+    doctor: Optional[str] = None
+    ward: Optional[str] = None
+    allergies: Optional[List[str]] = None
 
 
 class PatientUpdate(BaseModel):
@@ -55,6 +58,9 @@ class PatientUpdate(BaseModel):
     age: Optional[int] = None
     admission_reason: Optional[str] = None
     status: Optional[str] = None
+    doctor: Optional[str] = None
+    ward: Optional[str] = None
+    allergies: Optional[List[str]] = None
 
 
 class PatientResponse(BaseModel):
@@ -64,6 +70,9 @@ class PatientResponse(BaseModel):
     age: Optional[int]
     admission_reason: Optional[str]
     status: Optional[str]
+    doctor: Optional[str]
+    ward: Optional[str]
+    allergies: Optional[List[str]]
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -121,6 +130,11 @@ class HandoffErrorResponse(BaseModel):
     success: bool = False
     error: str
     fallback: Dict[str, Any] = {"risks": [], "alert": "Manual review required"}
+
+
+class TranscriptResponse(BaseModel):
+    """Simple wrapper for the raw transcript returned by /transcribe-only."""
+    transcript: str
 
 
 # ─────────────────────────────────────────────────────────────────────────────

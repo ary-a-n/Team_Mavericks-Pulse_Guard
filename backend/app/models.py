@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import JSONB
 
 from app.database import Base
 
@@ -28,7 +28,10 @@ class Patient(Base):
     bed_number = Column(String, index=True)
     age = Column(Integer)
     admission_reason = Column(String)
-    status=Column(String)
+    status = Column(String)
+    doctor = Column(String, nullable=True)          # Assigned doctor name
+    ward = Column(String, nullable=True)            # Ward / unit name
+    allergies = Column(ARRAY(String), nullable=True)  # e.g. ["Penicillin", "Latex"]
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
