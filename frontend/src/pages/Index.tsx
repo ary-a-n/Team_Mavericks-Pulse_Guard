@@ -72,6 +72,9 @@ const Index = () => {
   const [newBed, setNewBed] = useState("");
   const [newAdmissionReason, setNewAdmissionReason] = useState("");
   const [newStatus, setNewStatus] = useState<PatientStatus>("Stable");
+  const [newDoctor, setNewDoctor] = useState("");
+  const [newWard, setNewWard] = useState("");
+  const [newAllergies, setNewAllergies] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
 
   const greeting = useMemo(() => getGreeting(), []);
@@ -117,6 +120,9 @@ const Index = () => {
         bed_number: newBed.trim() || undefined,
         admission_reason: newAdmissionReason.trim() || undefined,
         status: newStatus.toLowerCase(),
+        doctor: newDoctor.trim() || undefined,
+        ward: newWard.trim() || undefined,
+        allergies: newAllergies ? newAllergies.split(",").map((s) => s.trim()).filter((s) => s) : undefined,
       });
       setPatients((prev) => [created, ...prev]);
       setNewName("");
@@ -124,6 +130,9 @@ const Index = () => {
       setNewBed("");
       setNewAdmissionReason("");
       setNewStatus("Stable");
+      setNewDoctor("");
+      setNewWard("");
+      setNewAllergies("");
       setIsAddOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add patient");
@@ -292,12 +301,38 @@ const Index = () => {
                       />
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="font-body text-sm">Doctor</Label>
+                      <Input
+                        value={newDoctor}
+                        onChange={(e) => setNewDoctor(e.target.value)}
+                        placeholder="e.g. Dr. Smith"
+                      />
+                    </div>
+                    <div>
+                      <Label className="font-body text-sm">Ward</Label>
+                      <Input
+                        value={newWard}
+                        onChange={(e) => setNewWard(e.target.value)}
+                        placeholder="e.g. ICU-3A"
+                      />
+                    </div>
+                  </div>
                   <div>
                     <Label className="font-body text-sm">Admission Reason</Label>
                     <Input
                       value={newAdmissionReason}
                       onChange={(e) => setNewAdmissionReason(e.target.value)}
                       placeholder="e.g. Acute COPD exacerbation"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-body text-sm">Allergies</Label>
+                    <Input
+                      value={newAllergies}
+                      onChange={(e) => setNewAllergies(e.target.value)}
+                      placeholder="Comma-separated (e.g. Penicillin, Peanuts)"
                     />
                   </div>
                   <div>
