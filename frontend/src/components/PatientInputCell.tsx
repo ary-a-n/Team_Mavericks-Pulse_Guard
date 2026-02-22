@@ -1,11 +1,32 @@
 import { useState, useRef, useCallback } from "react";
-import { Mic, Type, Pause, Play, Send, X, CheckCircle, AlertCircle } from "lucide-react";
+import {
+  Mic,
+  Type,
+  Pause,
+  Play,
+  Send,
+  X,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  FileAudio,
+  Edit3,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { processHandoff, HandoffSummaryResponse } from "@/lib/api/patients";
 
-type Mode = "idle" | "mic" | "text";
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Mode =
+  | "idle"
+  | "mic"           // actively recording
+  | "transcribing"  // STT in progress
+  | "review"        // showing transcript for edit before submit
+  | "text"          // manual text entry
+  | "submitting";   // agent pipeline in flight
+
 type MicState = "recording" | "paused";
 
 interface PatientInputCellProps {
@@ -18,59 +39,106 @@ interface SubmitResult {
   message: string;
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export const PatientInputCell = ({ patientId }: PatientInputCellProps) => {
   const [mode, setMode] = useState<Mode>("idle");
   const [micState, setMicState] = useState<MicState>("recording");
+  const [transcriptText, setTranscriptText] = useState("");
   const [textValue, setTextValue] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<SubmitResult | null>(null);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
-  const clearResult = () => setTimeout(() => setResult(null), 4000);
+  const scheduleResultClear = () => setTimeout(() => setResult(null), 5000);
 
-  // ── Text submit ───────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  const resetToIdle = useCallback(() => {
+    setMode("idle");
+    setMicState("recording");
+    setTranscriptText("");
+    setTextValue("");
+  }, []);
+
+  const stopMediaTracks = useCallback(() => {
+    mediaRecorderRef.current?.stop();
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    mediaRecorderRef.current = null;
+    streamRef.current = null;
+  }, []);
+
+  // ── Text submit ───────────────────────────────────────────────────────────
+
   const submitText = useCallback(async () => {
-    if (!textValue.trim()) return;
-    setIsSubmitting(true);
+    const body = textValue.trim();
+    if (!body) return;
+    setMode("submitting");
     try {
       const res: HandoffSummaryResponse = await processHandoff(
         Number(patientId),
-        textValue.trim()
+        body
       );
       setResult({
         type: "success",
         message: `Handoff processed · Risk: ${res.risk_level}`,
       });
-      setMode("idle");
-      setTextValue("");
-      clearResult();
+      resetToIdle();
+      scheduleResultClear();
     } catch (err) {
       setResult({
         type: "error",
         message: err instanceof Error ? err.message : "Submission failed",
       });
-      clearResult();
-    } finally {
-      setIsSubmitting(false);
+      setMode("text");
+      scheduleResultClear();
     }
-  }, [patientId, textValue]);
+  }, [patientId, textValue, resetToIdle]);
 
-  const cancelText = () => {
-    setMode("idle");
-    setTextValue("");
-  };
+  // ── Review/transcript submit ───────────────────────────────────────────────
 
-  // ── Mic controls ──────────────────────────────────────
+  const submitTranscript = useCallback(async () => {
+    const body = transcriptText.trim();
+    if (!body) return;
+    setMode("submitting");
+    try {
+      const res: HandoffSummaryResponse = await processHandoff(
+        Number(patientId),
+        body
+      );
+      setResult({
+        type: "success",
+        message: `Handoff processed · Risk: ${res.risk_level}`,
+      });
+      resetToIdle();
+      scheduleResultClear();
+    } catch (err) {
+      setResult({
+        type: "error",
+        message: err instanceof Error ? err.message : "Agent pipeline failed",
+      });
+      setMode("review");
+      scheduleResultClear();
+    }
+  }, [patientId, transcriptText, resetToIdle]);
+
+  // ── Mic controls ──────────────────────────────────────────────────────────
+
   const startMic = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
+      // Browsers only reliably record in WebM. The backend converts to WAV via ffmpeg.
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
-        : "audio/webm";
-      const recorder = new MediaRecorder(stream, { mimeType });
+        : MediaRecorder.isTypeSupported("audio/webm")
+          ? "audio/webm"
+          : "";
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
       chunksRef.current = [];
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
@@ -81,7 +149,7 @@ export const PatientInputCell = ({ patientId }: PatientInputCellProps) => {
       setMicState("recording");
     } catch {
       setResult({ type: "error", message: "Microphone access denied" });
-      clearResult();
+      scheduleResultClear();
     }
   }, []);
 
@@ -98,61 +166,71 @@ export const PatientInputCell = ({ patientId }: PatientInputCellProps) => {
   }, [micState]);
 
   const sendMic = useCallback(async () => {
-    mediaRecorderRef.current?.stop();
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    mediaRecorderRef.current = null;
-    streamRef.current = null;
+    // Collect final chunk before stopping
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) return;
 
-    const blob = new Blob(chunksRef.current, { type: "audio/webm;codecs=opus" });
+    const blob = await new Promise<Blob>((resolve) => {
+      recorder.addEventListener("stop", () => {
+        resolve(new Blob(chunksRef.current, { type: recorder.mimeType }));
+      }, { once: true });
+      recorder.stop();
+    });
+
+    stopMediaTracks();
     chunksRef.current = [];
 
     if (blob.size === 0) {
-      setMode("idle");
-      setMicState("recording");
+      resetToIdle();
       return;
     }
 
-    setIsSubmitting(true);
-    try {
-      const formData = new FormData();
-      formData.append("audio", blob, "recording.webm");
-      formData.append("patient_id", patientId);
+    setMode("transcribing");
 
-      // Audio endpoint — same proxy as text
-      const res = await fetch("/api/handoffs/upload", {
+    try {
+      // Name the file so the backend extension hint resolves to .webm for ffmpeg conversion.
+      const filename = blob.type.includes("webm") ? "recording.webm" : "recording.ogg";
+      const formData = new FormData();
+      formData.append("audio", blob, filename);
+
+      const token = localStorage.getItem("pg_token") ?? "";
+      const res = await fetch("/api/handoffs/transcribe-only", {
         method: "POST",
         body: formData,
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("pg_token") ?? ""}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error(await res.text());
-      setResult({ type: "success", message: "Audio handoff submitted" });
-      clearResult();
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || `HTTP ${res.status}`);
+      }
+
+      const data: { transcript: string } = await res.json();
+      const transcript = data.transcript?.trim() ?? "";
+
+      if (!transcript) {
+        throw new Error("Transcription returned empty — audio may be too short or silent.");
+      }
+
+      setTranscriptText(transcript);
+      setMode("review");
     } catch (err) {
       setResult({
         type: "error",
-        message: err instanceof Error ? err.message : "Upload failed",
+        message: err instanceof Error ? err.message : "Transcription failed",
       });
-      clearResult();
-    } finally {
-      setIsSubmitting(false);
-      setMode("idle");
-      setMicState("recording");
+      resetToIdle();
+      scheduleResultClear();
     }
-  }, [patientId]);
+  }, [stopMediaTracks, resetToIdle]);
 
   const cancelMic = useCallback(() => {
-    mediaRecorderRef.current?.stop();
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    mediaRecorderRef.current = null;
-    streamRef.current = null;
+    stopMediaTracks();
     chunksRef.current = [];
-    setMode("idle");
-    setMicState("recording");
-  }, []);
+    resetToIdle();
+  }, [stopMediaTracks, resetToIdle]);
 
-  // ── Render ────────────────────────────────────────────
+  // ── Render: result flash ──────────────────────────────────────────────────
 
   if (result) {
     return (
@@ -169,10 +247,12 @@ export const PatientInputCell = ({ patientId }: PatientInputCellProps) => {
         ) : (
           <AlertCircle size={12} />
         )}
-        <span className="truncate max-w-[180px]">{result.message}</span>
+        <span className="truncate max-w-[240px]">{result.message}</span>
       </div>
     );
   }
+
+  // ── Render: text mode ──────────────────────────────────────────────────────
 
   if (mode === "text") {
     return (
@@ -181,13 +261,10 @@ export const PatientInputCell = ({ patientId }: PatientInputCellProps) => {
           value={textValue}
           onChange={(e) => setTextValue(e.target.value)}
           placeholder="Enter handoff notes…"
-          className="h-16 min-h-[40px] text-sm resize-none py-1.5"
+          className="h-16 min-h-[40px] focus:min-h-[120px] transition-all duration-200 text-sm resize-y py-1.5"
           rows={2}
-          disabled={isSubmitting}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-              submitText();
-            }
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) submitText();
           }}
         />
         <div className="flex flex-col gap-1">
@@ -196,16 +273,15 @@ export const PatientInputCell = ({ patientId }: PatientInputCellProps) => {
             variant="default"
             onClick={submitText}
             className="h-8 px-2"
-            disabled={isSubmitting || !textValue.trim()}
+            disabled={!textValue.trim()}
           >
             <Send size={14} />
           </Button>
           <Button
             size="sm"
             variant="ghost"
-            onClick={cancelText}
+            onClick={resetToIdle}
             className="h-8 px-2 text-muted-foreground"
-            disabled={isSubmitting}
           >
             <X size={14} />
           </Button>
@@ -213,6 +289,8 @@ export const PatientInputCell = ({ patientId }: PatientInputCellProps) => {
       </div>
     );
   }
+
+  // ── Render: mic recording ──────────────────────────────────────────────────
 
   if (mode === "mic") {
     return (
@@ -224,24 +302,17 @@ export const PatientInputCell = ({ patientId }: PatientInputCellProps) => {
           )}
         />
         <span className="text-xs text-muted-foreground font-body">
-          {isSubmitting ? "Uploading…" : micState === "recording" ? "Recording…" : "Paused"}
+          {micState === "recording" ? "Recording…" : "Paused"}
         </span>
         <Button
           size="sm"
           variant="outline"
           onClick={togglePause}
           className="h-8 px-2"
-          disabled={isSubmitting}
         >
           {micState === "recording" ? <Pause size={14} /> : <Play size={14} />}
         </Button>
-        <Button
-          size="sm"
-          variant="default"
-          onClick={sendMic}
-          className="h-8 px-2"
-          disabled={isSubmitting}
-        >
+        <Button size="sm" variant="default" onClick={sendMic} className="h-8 px-2">
           <Send size={14} />
         </Button>
         <Button
@@ -249,7 +320,6 @@ export const PatientInputCell = ({ patientId }: PatientInputCellProps) => {
           variant="ghost"
           onClick={cancelMic}
           className="h-8 px-2 text-destructive"
-          disabled={isSubmitting}
         >
           <X size={14} />
         </Button>
@@ -257,14 +327,82 @@ export const PatientInputCell = ({ patientId }: PatientInputCellProps) => {
     );
   }
 
-  // idle
+  // ── Render: transcribing spinner ──────────────────────────────────────────
+
+  if (mode === "transcribing") {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground font-body">
+        <Loader2 size={14} className="animate-spin text-primary" />
+        <FileAudio size={14} />
+        <span>Transcribing audio…</span>
+      </div>
+    );
+  }
+
+  // ── Render: review transcript ─────────────────────────────────────────────
+
+  if (mode === "review") {
+    return (
+      <div className="flex flex-col gap-2 min-w-[280px] max-w-[420px]">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-body">
+          <Edit3 size={12} />
+          <span>Review transcript — edit if needed, then submit</span>
+        </div>
+        <Textarea
+          value={transcriptText}
+          onChange={(e) => setTranscriptText(e.target.value)}
+          className="text-sm resize-y focus:min-h-[160px] transition-all duration-200 min-h-[72px]"
+          rows={3}
+        />
+        <div className="flex items-center gap-2 justify-end">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={resetToIdle}
+            className="h-8 px-2 text-muted-foreground"
+          >
+            <X size={14} />
+          </Button>
+          <Button
+            size="sm"
+            variant="default"
+            onClick={submitTranscript}
+            disabled={!transcriptText.trim()}
+            className="h-8 px-3 gap-1.5"
+          >
+            <Send size={13} />
+            <span className="text-xs">Submit</span>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render: submitting to agent ────────────────────────────────────────────
+
+  if (mode === "submitting") {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground font-body">
+        <Loader2 size={14} className="animate-spin text-primary" />
+        <span>Running analysis…</span>
+      </div>
+    );
+  }
+
+  // ── Render: idle ───────────────────────────────────────────────────────────
+
   return (
     <div className="flex items-center gap-2">
       <Button size="sm" variant="outline" onClick={startMic} className="h-8 px-3 gap-1.5">
         <Mic size={14} />
         <span className="text-xs">Mic</span>
       </Button>
-      <Button size="sm" variant="outline" onClick={() => setMode("text")} className="h-8 px-3 gap-1.5">
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => setMode("text")}
+        className="h-8 px-3 gap-1.5"
+      >
         <Type size={14} />
         <span className="text-xs">Text</span>
       </Button>

@@ -363,36 +363,38 @@ export function PatientTimeline({ patientId, patientName }: PatientTimelineProps
                     </p>
                 </DialogHeader>
 
-                <ScrollArea className="flex-1 h-0 min-h-0 px-6 py-4">
-                    {isLoading ? (
-                        <div className="flex items-center justify-center py-16 text-muted-foreground font-body text-sm">
-                            Loading timeline…
-                        </div>
-                    ) : handoffs.length === 0 ? (
-                        <div className="flex items-center justify-center py-16 text-muted-foreground font-body text-sm">
-                            No handoffs recorded yet for this patient.
-                        </div>
-                    ) : (
-                        <>
-                            <RiskChart points={chartPoints} />
-
-                            <h3 className="text-sm font-heading font-semibold text-foreground mb-4">
-                                Shift History
-                            </h3>
-
-                            <div className="flex flex-col">
-                                {handoffs.map((h, i) => (
-                                    <TimelineEntry
-                                        key={h.id}
-                                        handoff={h}
-                                        index={i}
-                                        isLatest={i === 0}
-                                    />
-                                ))}
+                <div className="overflow-y-auto h-[75vh] w-full custom-scrollbar">
+                    <div className="px-6 py-4">
+                        {isLoading ? (
+                            <div className="flex items-center justify-center py-16 text-muted-foreground font-body text-sm">
+                                Loading timeline…
                             </div>
-                        </>
-                    )}
-                </ScrollArea>
+                        ) : handoffs.length === 0 ? (
+                            <div className="flex items-center justify-center py-16 text-muted-foreground font-body text-sm">
+                                No handoffs recorded yet for this patient.
+                            </div>
+                        ) : (
+                            <div className="pb-6">
+                                <RiskChart points={chartPoints} />
+
+                                <h3 className="text-sm font-heading font-semibold text-foreground mb-4">
+                                    Shift History
+                                </h3>
+
+                                <div className="flex flex-col">
+                                    {handoffs.map((h, i) => (
+                                        <TimelineEntry
+                                            key={h.id}
+                                            handoff={h}
+                                            index={i}
+                                            isLatest={i === 0}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </DialogContent>
         </Dialog>
     );

@@ -1,6 +1,14 @@
+import React from "react";
 import { motion } from "framer-motion";
 import { Heart, Activity, Wind, Thermometer, Droplets } from "lucide-react";
-import type { Vital } from "@/data/mockPatient";
+
+interface DisplayVital {
+  label: string;
+  value: string;
+  unit: string;
+  icon: "Heart" | "Activity" | "Wind" | "Thermometer" | "Droplets";
+  status: "normal" | "warning" | "critical";
+}
 
 const iconMap: Record<string, React.ElementType> = {
   Heart,
@@ -22,7 +30,7 @@ const statusText: Record<string, string> = {
   critical: "text-destructive",
 };
 
-export function VitalCard({ vital, index }: { vital: Vital; index: number }) {
+export function VitalCard({ vital, index }: { vital: DisplayVital; index: number }) {
   const Icon = iconMap[vital.icon] || Heart;
   const isHeartRate = vital.label === "Heart Rate";
   const iconColor = isHeartRate ? "text-red-600" : statusText[vital.status];
@@ -40,7 +48,7 @@ export function VitalCard({ vital, index }: { vital: Vital; index: number }) {
         {vital.label}
       </span>
       <span className={`text-2xl font-heading ${valueColor}`}>
-        {vital.value}
+        {vital.value || "N/A"}
       </span>
       <span className="text-xs text-muted-foreground">{vital.unit}</span>
     </motion.div>

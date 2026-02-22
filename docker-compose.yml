@@ -1,0 +1,24 @@
+services:
+  # ─────────────────────────────────────────────────────────
+  # PostgreSQL 16 Alpine — database only
+  # ─────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: pulseguard_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hacky
+      POSTGRES_PASSWORD: 12345678
+      POSTGRES_DB: hackathon
+    ports:
+      - "5432:5432" # exposed locally so backend dev server can hit it
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U hacky -d hackathon" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

@@ -1,7 +1,17 @@
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { User, Stethoscope, MapPin, BedDouble, AlertTriangle } from "lucide-react";
-import type { Patient } from "@/data/mockPatient";
+
+interface DisplayPatient {
+  name: string;
+  age: number;
+  bed: string;
+  doctor: string;
+  ward: string;
+  status: string;
+  allergies: string[];
+  diagnosis: string;
+}
 
 const statusColors: Record<string, string> = {
   Stable: "bg-success text-success-foreground",
@@ -9,7 +19,7 @@ const statusColors: Record<string, string> = {
   Watchlist: "bg-warning text-warning-foreground",
 };
 
-export function PatientHeaderCard({ patient }: { patient: Patient }) {
+export function PatientHeaderCard({ patient }: { patient: DisplayPatient }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -30,21 +40,21 @@ export function PatientHeaderCard({ patient }: { patient: Patient }) {
 
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-muted-foreground text-base">
             <span className="flex items-center gap-1.5">
-              <User size={16} /> {patient.age} yrs
+              <User size={16} /> {patient.age ? `${patient.age} yrs` : "N/A"}
             </span>
             <span className="flex items-center gap-1.5">
-              <BedDouble size={16} /> Bed {patient.bed}
+              <BedDouble size={16} /> Bed {patient.bed || "N/A"}
             </span>
             <span className="flex items-center gap-1.5">
-              <Stethoscope size={16} /> {patient.doctor}
+              <Stethoscope size={16} /> {patient.doctor || "N/A"}
             </span>
             <span className="flex items-center gap-1.5">
-              <MapPin size={16} /> {patient.ward}
+              <MapPin size={16} /> {patient.ward || "N/A"}
             </span>
           </div>
 
           <p className="text-foreground/80 text-base max-w-2xl leading-relaxed">
-            {patient.diagnosis}
+            {patient.diagnosis || "N/A"}
           </p>
         </div>
 
@@ -53,16 +63,20 @@ export function PatientHeaderCard({ patient }: { patient: Patient }) {
             Allergies
           </span>
           <div className="flex flex-wrap gap-2">
-            {patient.allergies.map((a) => (
-              <Badge
-                key={a}
-                variant="outline"
-                className="bg-destructive/10 text-destructive border-destructive/20 font-body text-sm px-2.5 py-0.5 rounded-md"
-              >
-                <AlertTriangle size={12} className="mr-1" />
-                {a}
-              </Badge>
-            ))}
+            {patient.allergies.length === 0 ? (
+              <span className="text-sm text-muted-foreground font-body">None recorded</span>
+            ) : (
+              patient.allergies.map((a) => (
+                <Badge
+                  key={a}
+                  variant="outline"
+                  className="bg-destructive/10 text-destructive border-destructive/20 font-body text-sm px-2.5 py-0.5 rounded-md"
+                >
+                  <AlertTriangle size={12} className="mr-1" />
+                  {a}
+                </Badge>
+              ))
+            )}
           </div>
         </div>
       </div>

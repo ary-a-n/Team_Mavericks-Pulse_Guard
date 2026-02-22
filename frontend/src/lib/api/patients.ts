@@ -11,6 +11,9 @@ export interface PatientResponse {
     age: number | null;
     admission_reason: string | null;
     status: string | null;
+    doctor: string | null;
+    ward: string | null;
+    allergies: string[] | null;
     created_at: string;
 }
 
@@ -20,6 +23,9 @@ export interface PatientCreate {
     age?: number;
     admission_reason?: string;
     status?: string;
+    doctor?: string;
+    ward?: string;
+    allergies?: string[];
 }
 
 export interface VitalsHistoryResponse {
@@ -133,3 +139,59 @@ export function getPatientHandoffs(
         `/api/handoffs/patient/${patientId}?limit=${limit}`
     );
 }
+
+/**
+ * Uploads audio to the backend for transcription only (no agent pipeline).
+ * Returns the raw transcript text for user review before submission.
+ */
+export async function transcribeAudio(audioBlob: Blob): Promise<string> {
+    const token = localStorage.getItem("pg_token") ?? "";
+    const formData = new FormData();
+    const filename = audioBlob.type.includes("webm") ? "recording.webm" : "recording.ogg";
+    formData.append("audio", audioBlob, filename);
+
+    const res = await fetch("/api/handoffs/transcribe-only", {
+        method: "POST",
+        body: formData,
+        headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || `HTTP ${res.status}`);
+    }
+
+    const data: { transcript: string } = await res.json();
+    return data.transcript?.trim() ?? "";
+}
+
+/**
+ * Uploads audio → STT → agent pipeline in a single request.
+ * Use this when you want to skip the preview/edit step.
+ */
+export async function uploadAudioHandoff(
+    patientId: number,
+    audioBlob: Blob,
+    handoffTime = "07:00 AM"
+): Promise<HandoffSummaryResponse> {
+    const token = localStorage.getItem("pg_token") ?? "";
+    const formData = new FormData();
+    const filename = audioBlob.type.includes("webm") ? "recording.webm" : "recording.ogg";
+    formData.append("audio", audioBlob, filename);
+    formData.append("patient_id", String(patientId));
+    formData.append("handoff_time", handoffTime);
+
+    const res = await fetch("/api/handoffs/upload-audio", {
+        method: "POST",
+        body: formData,
+        headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || `HTTP ${res.status}`);
+    }
+
+    return res.json() as Promise<HandoffSummaryResponse>;
+}
+

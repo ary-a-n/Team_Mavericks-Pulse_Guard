@@ -9,7 +9,6 @@ import { PatientHeaderCard } from "@/components/PatientHeaderCard";
 import { VitalCard } from "@/components/VitalCard";
 import { RiskAlertCard } from "@/components/RiskAlertCard";
 import { MedicationList } from "@/components/MedicationList";
-import { InvestigationList } from "@/components/InvestigationList";
 import { getPatientDashboard, PatientDashboard } from "@/lib/api/patients";
 
 interface HinglishSummary {
@@ -46,13 +45,6 @@ interface DisplayMedication {
   status: "active" | "completed" | "hold";
 }
 
-interface DisplayInvestigation {
-  name: string;
-  status: "pending" | "completed";
-  result?: string;
-  orderedAt: string;
-}
-
 interface DisplayPatient {
   name: string;
   age: number;
@@ -64,7 +56,6 @@ interface DisplayPatient {
   diagnosis: string;
   vitals: DisplayVital[];
   medications: DisplayMedication[];
-  investigations: DisplayInvestigation[];
   riskTimeline: Array<{ shift: string; time: string; score: number; label?: string }>;
   eventsTimeline: Array<{
     id: string;
@@ -155,8 +146,6 @@ const dashboardToDisplayPatient = (dashboard: PatientDashboard): DisplayPatient 
         ? hinglish.risk_alerts
         : [];
 
-  const investigations: DisplayInvestigation[] = [];
-
   const actionItems =
     hinglish?.action_items && hinglish.action_items.length > 0 ? hinglish.action_items : [];
 
@@ -164,14 +153,13 @@ const dashboardToDisplayPatient = (dashboard: PatientDashboard): DisplayPatient 
     name: dashboard.patient.name,
     age: dashboard.patient.age ?? 0,
     bed: dashboard.patient.bed_number ?? "—",
-    doctor: "Not assigned",
-    ward: "ICU-3A",
+    doctor: dashboard.patient.doctor ?? "Not assigned",
+    ward: dashboard.patient.ward ?? "—",
     status: statusMap[dashboard.patient.status?.toLowerCase() ?? "stable"] ?? "Stable",
-    allergies: [],
+    allergies: dashboard.patient.allergies ?? [],
     diagnosis: hinglish?.patient_overview ?? dashboard.patient.admission_reason ?? "No diagnosis recorded",
     vitals: vitalsFromDashboard.slice(0, 5),
     medications: medsFromDashboard,
-    investigations,
     riskTimeline: [],
     eventsTimeline: [],
     riskFlags,
@@ -278,9 +266,8 @@ const PatientDetail = () => {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="w-full">
             <MedicationList medications={displayPatient.medications} />
-            <InvestigationList investigations={displayPatient.investigations} />
           </div>
 
           {!!hinglish && (
